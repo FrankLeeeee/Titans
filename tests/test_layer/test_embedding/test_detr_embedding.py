@@ -2,27 +2,21 @@ import colossalai
 import pytest
 import torch
 
-from titans.model.vit import VisionTransformer
+from titans.layer.embedding import PositionEmbeddingSine
 from colossalai.global_variables import tensor_parallel_env as tp_env
 from colossalai.testing import rerun_if_address_is_in_use
 from tests.utils import run_with_parallel_config
 
 BATCH_SIZE = 4
-IMAGE_SIZE = 224
-PATCH_SIZE = 16
-NUM_HEADS = 4
-IN_CHANS = 3
+SEQ_LENGHT = 16
 HIDDEN_SIZE = 32
+VOCAB_SIZE = 50304
 
 
-def run_vit(data, img_size, patch_size, in_chans, hidden_size, num_heads):
+def run_detr_embed(data, hidden_size, vocab_size):
 
     #build model
-    model = VisionTransformer(img_size=img_size,
-                              patch_size=patch_size,
-                              in_chans=in_chans,
-                              dim=hidden_size,
-                              num_heads=num_heads).cuda()
+    model = PositionEmbeddingSine().cuda()
 
     # forward
     out = model(data)
@@ -37,11 +31,12 @@ def run_dist(rank, world_size, port, config):
     if tp_env.mode == 'sequence':
         tp_env.mode = None
 
-    data = torch.rand(BATCH_SIZE, IN_CHANS, IMAGE_SIZE, IMAGE_SIZE).cuda()
-    run_vit(data, IMAGE_SIZE, PATCH_SIZE, IN_CHANS, HIDDEN_SIZE, NUM_HEADS)
+    data = torch.rand(BATCH_SIZE, SEQ_LENGHT) * VOCAB_SIZE
+    data = data.int().cuda()
+    run_detr_embed(data, HIDDEN_SIZE, VOCAB_SIZE)
 
 
 @pytest.mark.parametrize('parallel_config', [(4, '1d'), (4, '2d'), (4, '2.5d'), (8, '2.5d'), (8, '3d')])
 @rerun_if_address_is_in_use()
-def test_vit(parallel_config):
+def test_detr_embedding(parallel_config):
     run_with_parallel_config(*parallel_config, run_func=run_dist)
